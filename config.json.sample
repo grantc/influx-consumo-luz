@@ -1,0 +1,13 @@
+{
+  "i-de": {
+    "username": "",
+    "password": "",
+    "days": 1
+  },
+  "influxdb": {
+    "url": "http://influxdb:8086",
+    "token": "",
+    "org": "org-name",
+    "bucket": "bucket-name"
+  }
+}
