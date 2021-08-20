@@ -29,9 +29,9 @@ class lector:
         timeseries = []
         timestamp = datetime.combine(from_date, time()) - timedelta(hours=0)
         for kw in consumo:
-            if  kw is not None:
-              lector = {"timestamp": timestamp, "valor": kw}
-              timeseries.append(lector)
+            if kw is not None:
+                lector = {"timestamp": timestamp, "valor": kw}
+                timeseries.append(lector)
             timestamp = timestamp + timedelta(hours=1)
 
         return timeseries
