@@ -1,6 +1,9 @@
+import sys
+
 from os import times
 from influxdb_client.domain.write_precision import WritePrecision
 from oligo import Iber
+from oligo.iber import ResponseException
 from datetime import date, time, timedelta, datetime
 
 from config import *
@@ -11,6 +14,8 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from rich.console import Console
 
 from pprint import pprint
+
+import pytz
 
 
 class lector:
@@ -24,13 +29,17 @@ class lector:
         from_date = date.today() - timedelta(days=start)
         until_date = date.today() - timedelta(days=end)
 
-        consumo = self.connection.consumption(from_date, until_date)
+        try:
+            consumo = self.connection.consumption(from_date, until_date)
+        except ResponseException as e:
+            console.log(str(e.message))
+            sys.exit(1)
 
         timeseries = []
-        timestamp = datetime.combine(from_date, time()) - timedelta(hours=0)
+        timestamp = datetime.combine(from_date, time(), pytz.timezone("Europe/Madrid")) - timedelta(hours=0)
         for kw in consumo:
             if kw is not None:
-                lector = {"timestamp": timestamp, "valor": kw}
+                lector = {"timestamp": timestamp.astimezone(pytz.utc), "valor": kw}
                 timeseries.append(lector)
             timestamp = timestamp + timedelta(hours=1)
 
@@ -49,7 +58,7 @@ def influx_write(data):
 
     for row in data:
         p = (
-            Point.measurement("luz")
+            Point.measurement("distribución")
             .tag("lugar", "zaratan")
             .field("lectura", row["valor"])
             .time(

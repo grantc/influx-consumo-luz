@@ -6,5 +6,6 @@ try:
 except json.JSONDecodeError as exc:
     print(exc)
 
-influx = config["influxdb"]
+influx = config["influx"]
 i_de = config["i-de"]
+shelly = config["shelly"]
