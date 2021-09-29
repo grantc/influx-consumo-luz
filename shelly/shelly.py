@@ -62,6 +62,8 @@ def influx_write(data):
             Point.measurement("shelly")
             .tag("lugar", "casa")
             .field(lectura, row["power"])
+            .field("voltaje", row["voltage"])
+            .field("reactivo", row["reactive"])
         )
         write_api.write(bucket=influx["bucket"], record=p)
 
