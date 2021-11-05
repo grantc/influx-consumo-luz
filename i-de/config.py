@@ -8,4 +8,3 @@ except json.JSONDecodeError as exc:
 
 influx = config["influx"]
 i_de = config["i-de"]
-shelly = config["shelly"]
