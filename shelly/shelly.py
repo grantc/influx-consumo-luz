@@ -64,6 +64,7 @@ def influx_write(data):
             .field(lectura, row["power"])
             .field("voltaje", row["voltage"])
             .field("reactivo", row["reactive"])
+            .field("lectura", row["power"])
         )
         write_api.write(bucket=influx["bucket"], record=p)
 
