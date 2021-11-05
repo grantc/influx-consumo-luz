@@ -36,10 +36,14 @@ class lector:
             sys.exit(1)
 
         timeseries = []
-        timestamp = datetime.combine(from_date, time(), pytz.timezone("Europe/Madrid")) - timedelta(hours=0)
+        timestamp = datetime.combine(from_date, time()) - timedelta(hours=0)
+        # Añadir el TZ al timestamp para que Influx sabe convertirlo a UTC
+        madrid = pytz.timezone("Europe/Madrid")
+        local_timestamp = madrid.localize(timestamp)
+
         for kw in consumo:
             if kw is not None:
-                lector = {"timestamp": timestamp.astimezone(pytz.utc), "valor": kw}
+                lector = {"timestamp": local_timestamp, "valor": kw}
                 timeseries.append(lector)
             timestamp = timestamp + timedelta(hours=1)
 
