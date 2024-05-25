@@ -1,6 +1,11 @@
 import json
+import os
 
-f = open("config.json", "r")
+if os.path.isfile("config.json"):
+    f = open("config.json", "r")
+else:
+    f = open(f"{os.path.dirname(os.path.realpath(__file__))}/config.json")
+
 try:
     config = json.load(f)
 except json.JSONDecodeError as exc:

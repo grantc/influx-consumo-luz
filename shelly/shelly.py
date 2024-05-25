@@ -1,12 +1,10 @@
-import sys
+from datetime import datetime, timedelta
 
-from os import times
-from datetime import date, time, datetime
-
-from config import *
+from config import shelly, influx
 
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.domain.write_precision import WritePrecision
 
 from rich.console import Console
 
@@ -17,29 +15,111 @@ import pytz
 
 class lector:
     def __init__(self) -> None:
-        pass
+        self.luz_neto = 0  # consumo y placas combinado
+        self.solar = 1  # Placas
 
     def lectura_actual(self, config, sensor):
-
+        """Leer del shelly"""
         url = f"http://{config['server']}/emeter/{sensor}"
-        response = requests.get(url)
-        lectura = response.json()
-        timestamp = datetime.now()
+        try:
+            response = requests.get(url)
+            lectura = response.json()
+            timestamp = datetime.now()
+        except requests.exceptions.ConnectionError:
+            lectura = {
+                'power': 0.0,
+                'reactive': 0.0,
+                'voltage': 240.0
+            }
         lectura["timestamp"] = timestamp
-        return [lectura]
+        return [lectura][0]
 
+    def lectura(self):
+        """Leer datos de los sensores"""
 
-def influx_write(data):
+        # Init
+        neto = {"power": 0.0}
+        consumo = {"power": 0.0}
+        importacion = {"power": 0.0}
+        excedentes = {"power": 0.0}
 
-    client = InfluxDBClient(url=influx["url"], token=influx["token"], org=influx["org"])
+        # Neto de consumo actual y la generación de las placas
+        luz_neto = self.lectura_actual(shelly, self.luz_neto)
+        # console.log(f"{self.luz_neto} - {luz_neto}")
 
-    write_api = client.write_api(write_options=SYNCHRONOUS)
+        # Generacion de las placas
+        solar = self.lectura_actual(shelly, self.solar)
+        # console.log(f"{self.solar} - {solar}")
+        if solar["power"] < 0:
+            # Solar es un valor negativo
+            solar["power"] = solar["power"] * -1
 
-    for row in data:
+        # Consumo real = neto - solar
+        consumo["power"] = round(luz_neto["power"] + solar["power"], 2)
+
+        # Vertimos a la red?
+        if luz_neto["power"] < 0:  # excedentes
+            excedentes["power"] = luz_neto["power"] * -1
+            importacion["power"] = 0.0
+            neto["power"] = 0.0
+        else:
+            importacion["power"] = luz_neto["power"]
+            excedentes["power"] = 0.0
+
+        periodo = self.periodo()
+
+        datos = {
+            "consumo": consumo["power"],
+            "excedentes": excedentes["power"],
+            "importacion": importacion["power"],
+            "solar": solar["power"],
+            "neto": neto["power"],
+            "luz_neto": luz_neto["power"],
+            "periodo": periodo,
+            "reactivo": luz_neto["reactive"],
+            "voltaje": luz_neto["voltage"]
+        }
+        # console.log(f"{datos}")
+        return datos
+
+    def escritura(self, datos):
+
+        client = InfluxDBClient(
+            url=influx["url"], token=influx["token"], org=influx["org"]
+        )
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+
+        medidas = [
+            "consumo",
+            "excedentes",
+            "importacion",
+            "luz_neto",
+            "neto",
+            "solar",
+        ]
+
+        tz = pytz.timezone("Europe/Madrid")
+        now_local = datetime.now(tz)
+        for medida in medidas:
+            p = (
+                Point.measurement(medida)
+                .tag("lugar", "casa")
+                .field(datos["periodo"], datos[medida])
+                .field("voltaje", datos["voltaje"])
+                .field("reactivo", datos["reactivo"])
+                .field("lectura", datos[medida])
+                .time(
+                  now_local + timedelta(seconds=0),
+                  write_precision=WritePrecision.S,
+                )
+            )
+            write_api.write(bucket=influx["bucket"], record=p)
+
+    def periodo(self):
+        """Calcula el periodo de luz"""
         dow = datetime.today().weekday()
         if dow >= 5:
             lectura = "lectura_valle"
-            console.log(f"{dow} - {lectura} - {row['power']}")
         else:
             tz = pytz.timezone("Europe/Madrid")
             now_local = datetime.now(tz)
@@ -56,17 +136,7 @@ def influx_write(data):
                 lectura = "lectura_punto"
             else:  # 22:00-23:59 punto llano
                 lectura = "lectura_llano"
-            console.log(f"{dow} - {current_hour} - {lectura} - {row['power']}")
-
-        p = (
-            Point.measurement("shelly")
-            .tag("lugar", "casa")
-            .field(lectura, row["power"])
-            .field("voltaje", row["voltage"])
-            .field("reactivo", row["reactive"])
-            .field("lectura", row["power"])
-        )
-        write_api.write(bucket=influx["bucket"], record=p)
+        return lectura
 
 
 console = Console()
@@ -74,10 +144,10 @@ console = Console()
 
 def main():
 
-    l = lector()
+    shelly = lector()
     while True:
-        lecturas = l.lectura_actual(shelly, 0)
-        influx_write(lecturas)
+        datos = shelly.lectura()
+        shelly.escritura(datos)
         time.sleep(1)
 
 

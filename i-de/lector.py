@@ -39,10 +39,9 @@ class lector:
         timestamp = datetime.combine(from_date, time()) - timedelta(hours=0)
         # Añadir el TZ al timestamp para que Influx sabe convertirlo a UTC
         madrid = pytz.timezone("Europe/Madrid")
-        local_timestamp = madrid.localize(timestamp)
-
         for kw in consumo:
             if kw is not None:
+                local_timestamp = madrid.localize(timestamp)
                 lector = {"timestamp": local_timestamp, "valor": kw}
                 timeseries.append(lector)
             timestamp = timestamp + timedelta(hours=1)
@@ -61,6 +60,7 @@ def influx_write(data):
     write_api = client.write_api(write_options=SYNCHRONOUS)
 
     for row in data:
+        console.log(row)
         p = (
             Point.measurement("distribución")
             .tag("lugar", "zaratan")
@@ -80,7 +80,7 @@ def main():
 
     l = lector(i_de["username"], i_de["password"])
     lecturas = l.lectura_periodo(start=i_de["days"])
-    console.log(lecturas)
+    # console.log(lecturas)
 
     influx_write(lecturas)
 
