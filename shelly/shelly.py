@@ -21,17 +21,18 @@ class lector:
     def lectura_actual(self, config, sensor):
         """Leer del shelly"""
         url = f"http://{config['server']}/emeter/{sensor}"
+        timestamp = datetime.now()
+        lectura = {
+            'power': 0.0,
+            'reactive': 0.0,
+            'voltage': 240.0,
+            'timestamp': timestamp,
+        }
         try:
             response = requests.get(url)
             lectura = response.json()
-            timestamp = datetime.now()
         except requests.exceptions.ConnectionError:
-            lectura = {
-                'power': 0.0,
-                'reactive': 0.0,
-                'voltage': 240.0
-            }
-        lectura["timestamp"] = timestamp
+            print("Unable to connect to shelly")
         return [lectura][0]
 
     def lectura(self):
@@ -43,9 +44,12 @@ class lector:
         importacion = {"power": 0.0}
         excedentes = {"power": 0.0}
 
-        # Neto de consumo actual y la generación de las placas
-        luz_neto = self.lectura_actual(shelly, self.luz_neto)
-        # console.log(f"{self.luz_neto} - {luz_neto}")
+        try:
+            # Neto de consumo actual y la generación de las placas
+            luz_neto = self.lectura_actual(shelly, self.luz_neto)
+            # console.log(f"{self.luz_neto} - {luz_neto}")
+        except Exception:
+            raise Exception("Error fetching shelly data")
 
         # Generacion de las placas
         solar = self.lectura_actual(shelly, self.solar)
@@ -113,7 +117,10 @@ class lector:
                   write_precision=WritePrecision.S,
                 )
             )
-            write_api.write(bucket=influx["bucket"], record=p)
+            try:
+                write_api.write(bucket=influx["bucket"], record=p)
+            except OSError:
+                raise Exception("Failed to connect to influx")
 
     def periodo(self):
         """Calcula el periodo de luz"""
